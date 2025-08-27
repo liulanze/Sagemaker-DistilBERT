@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'News Classification API with Lambda and SageMaker'
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+
+Parameters:
+  SageMakerEndpointName:
+    Type: String
+    Default: multiclass-text-classification-endpointv1
+    Description: Name of the SageMaker endpoint for news classification
+
+Resources:
+  # API Gateway
+  NewsClassificationApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # Lambda Function
+  NewsClassifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: aws-lambda-llm-endpoint-invoke-function.lambda_handler
+      Runtime: python3.9
+      Environment:
+        Variables:
+          SAGEMAKER_ENDPOINT_NAME: !Ref SageMakerEndpointName
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sagemaker:InvokeEndpoint
+              Resource: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${SageMakerEndpointName}'
+      Events:
+        ClassifyNews:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NewsClassificationApi
+            Path: /classify
+            Method: POST
+
+Outputs:
+  NewsClassificationApiUrl:
+    Description: "API Gateway endpoint URL for news classification"
+    Value: !Sub "https://${NewsClassificationApi}.execute-api.${AWS::Region}.amazonaws.com/prod/classify"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiUrl"
+      
+  LambdaFunction:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt NewsClassifierFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaArn"

@@ -35,4 +35,4 @@ def main():
     create_tar_file(input_files)
 
 if __name__ == '__main__':
-    main()p
+    main()

@@ -1,5 +1,6 @@
 import json
 import boto3
+import os
 
 def lambda_handler(event, context):
 
@@ -11,7 +12,7 @@ def lambda_handler(event, context):
 
     #headline = "How I met your Mother voted as best sitcom in Europe"
 
-    endpoint_name = 'your-endpoint-name'
+    endpoint_name = os.environ.get('SAGEMAKER_ENDPOINT_NAME', 'multiclass-text-classification-endpointv1')
 
     payload = json.dumps({"inputs": headline})
 

@@ -134,6 +134,24 @@ for batch in training_loader:
 torch.Size([4, 512])   # 4 samples, each 512 tokens long (MAX_LEN)
 torch.Size([4, 512])   # 4 attention masks
 torch.Size([4])        # 4 labels
+
+# Single iteration breakdown:
+batch = next(iter(training_loader))
+
+# batch contains:
+{
+    'ids': tensor([[101, 2023, 2003, ...],     # Article 1 tokens
+                   [101, 2028, 2062, ...],     # Article 2 tokens  
+                   [101, 3899, 2024, ...],     # Article 3 tokens
+                   [101, 2061, 2003, ...]]),   # Article 4 tokens (shape: [4, 512])
+    
+    'mask': tensor([[1, 1, 1, ..., 0, 0],      # Article 1 attention mask
+                    [1, 1, 1, ..., 1, 0],      # Article 2 attention mask
+                    [1, 1, 1, ..., 0, 0],      # Article 3 attention mask  
+                    [1, 1, 1, ..., 1, 1]]),    # Article 4 attention mask (shape: [4, 512])
+    
+    'target': tensor([0, 2, 1, 3])             # Labels: [Entertainment, Science, Business, Health]
+}
 '''
 
 class DistilBERTClass(torch.nn.Module):
@@ -143,7 +161,7 @@ class DistilBERTClass(torch.nn.Module):
 
         # Downloads a pretrained DistilBERT encoder (6 transformer layers, hidden size 768).
         # Base model (66M parameters).
-        self.l1 = DistilBERTModel.from_pretrained('distilbert-base-uncased')
+        self.l1 = DistilBertModel.from_pretrained('distilbert-base-uncased')
 
         '''
         A fully connected layer (Linear transformation).
@@ -184,6 +202,16 @@ class DistilBERTClass(torch.nn.Module):
         pooler = self.dropout(pooler)
 
         # Logits output
+        '''
+        # outputs shape: [4, 4]
+        # Each row is one example's logits for 4 classes
+        outputs = [
+            [-0.2,  1.5, -0.8,  0.3],  # Example 1's logits
+            [ 0.7, -1.2,  2.1, -0.5],  # Example 2's logits  
+            [-1.1,  0.4, -0.3,  1.8],  # Example 3's logits
+            [ 1.2, -0.7,  0.9, -1.4]   # Example 4's logits
+        ]
+        '''
         output = self.classifier(pooler)
 
         return output
@@ -219,18 +247,19 @@ def train(epoch, model, device, training_loader, optimizer, loss_function):
         nb_tr_steps += 1
         nb_tr_examples += targets.size(0) # batch size, 4 here in this example.
 
-        if idx % 5000 == 0: # 100k / 4 = 25,000 ()
+        if idx % 5000 == 0: # 10k / 4 = 2,500
             ave_loss_step = tr_loss / nb_tr_steps
             ave_accu_step = n_correct / nb_tr_examples * 100
-            print(f"Training loss per 5000 steps: {loss_step}")
-            print(f"Training Accuracy per 5000 steps: {accu_step}")
+            print(f"Training loss per 5000 steps: {ave_loss_step}")
+            print(f"Training Accuracy per 5000 steps: {ave_accu_step}")
 
+        # Fine-tuning logics here!
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-    epoch_loss = tr_loss / nb_tr_steps
-    epoch_accu = n_correct / nb_tr_examples * 100
+    epoch_loss = tr_loss / nb_tr_steps # 0.13
+    epoch_accu = n_correct / nb_tr_examples * 100 # 93%
     print(f"Training Loss Epoch: {epoch_loss}")
     print(f"Training accuracy Epoch: {epoch_accu}")
 
@@ -244,33 +273,33 @@ def valid(epoch, model, testing_loader, device, loss_function):
     nb_tr_steps = 0
     nb_tr_examples = 0
 
-    with torch.no_grad()
+    with torch.no_grad():
 
-    for idx, data in enumerate(testing_loader):
-        ids = data['ids'].to(device, dtype=torch.long)
-        mask = data['mask'].to(device, dtype=torch.long)
-        targets = data['targets'].to(device, dtype=torch.long)
+        for idx, data in enumerate(testing_loader):
+            ids = data['ids'].to(device, dtype=torch.long)
+            mask = data['mask'].to(device, dtype=torch.long)
+            targets = data['targets'].to(device, dtype=torch.long)
 
-        outputs = model(ids, mask).squeeze()
+            outputs = model(ids, mask).squeeze()
 
-        loss = loss_function(outputs, targets)
-        tr_loss += loss.item()
-        big_val, big_idx = torch.max(outputs.data, dim=1)
-        n_correct += calculate_accu(big_idx, targets)
+            loss = loss_function(outputs, targets)
+            tr_loss += loss.item()
+            big_val, big_idx = torch.max(outputs.data, dim=1)
+            n_correct += calculate_accu(big_idx, targets)
 
-        nb_tr_steps += 1
-        nb_tr_examples += targets.size(0)
+            nb_tr_steps += 1
+            nb_tr_examples += targets.size(0)
 
-        if idx % 1000 == 0:
-            loss_step = tr_loss / nb_tr_steps
-            accu_step = n_correct / nb_tr_examples * 100
-            print(f"Validation loss per 1000 steps: {loss_step}")
-            print(f"Validation accuracy per 1000 steps: {accu_step}")
+            if idx % 1000 == 0:
+                loss_step = tr_loss / nb_tr_steps
+                accu_step = n_correct / nb_tr_examples * 100
+                print(f"Validation loss per 1000 steps: {loss_step}")
+                print(f"Validation accuracy per 1000 steps: {accu_step}")
 
-        epoch_loss = tr_loss / nb_tr_steps
-        epoch_accu = n_correct / nb_tr_examples * 100
-        print(f"Validation loss per Epoch: {epoch_loss} at epoch {epoch}")
-        print(f"Validation accuracy epoch: {epoch_accu} at epoch {epoch}")
+            epoch_loss = tr_loss / nb_tr_steps
+            epoch_accu = n_correct / nb_tr_examples * 100
+            print(f"Validation loss per Epoch: {epoch_loss} at epoch {epoch}")
+            print(f"Validation accuracy epoch: {epoch_accu} at epoch {epoch}")
 
     return epoch_accu
 
@@ -287,7 +316,7 @@ def main():
     args.epochs
     args.train_batch_size
 
-    device = torch.device("cude" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
